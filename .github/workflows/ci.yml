@@ -48,12 +48,12 @@ jobs:
       - name: Verify distributable package
         run: cargo package --allow-dirty
 
-      - name: Install MSRV Rust 1.88
+      - name: Install Rust 1.97.1
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.97.1"
 
-      - name: Build and test with locked MSRV dependency graph
+      - name: Build and test with locked Rust 1.97.1 dependency graph
         run: |
-          cargo +1.88.0 build --locked --all-targets
-          cargo +1.88.0 test --locked --all-targets
+          cargo +1.97.1 build --locked --all-targets
+          cargo +1.97.1 test --locked --all-targets
