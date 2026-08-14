@@ -48,12 +48,38 @@ jobs:
       - name: Verify distributable package
         run: cargo package --allow-dirty
 
-      - name: Install MSRV Rust 1.88
+      - name: Install Rust 1.97.1
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.97.1"
 
-      - name: Build and test with locked MSRV dependency graph
+      - name: Build and test with locked Rust 1.97.1 dependency graph
         run: |
-          cargo +1.88.0 build --locked --all-targets
-          cargo +1.88.0 test --locked --all-targets
+          cargo +1.97.1 build --locked --all-targets
+          cargo +1.97.1 test --locked --all-targets
+
+
+  live-api:
+    name: Live API integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KODIK_API_TOKEN: ${{ secrets.KODIK_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Require Kodik token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$KODIK_API_TOKEN" ]; then
+            echo "KODIK_API_TOKEN is missing from repository Actions secrets." >&2
+            exit 1
+          fi
+
+      - name: Run ignored live integration tests sequentially
+        run: cargo test --locked --test live_api -- --ignored --test-threads=1
