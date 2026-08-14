@@ -24,7 +24,7 @@ KODIK_API_TOKEN='ваш_токен' \
 
 ## GitHub Actions
 
-Workflow [`.github/workflows/live-api.yml`](../.github/workflows/live-api.yml) запускается после **каждого push в любую ветку** и вручную. Он берёт значение исключительно из обычного repository Actions secret `KODIK_API_TOKEN`; GitHub Environment намеренно не используется, поэтому обычный CI job не отображается как deployment.
+Обычный workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) запускается после **каждого push в любую ветку** и вручную. Его job `Live API integration tests` берёт значение исключительно из обычного repository Actions secret `KODIK_API_TOKEN`; GitHub Environment намеренно не используется, поэтому проверка не отображается как deployment.
 
 Создать secret может владелец репозитория с соответствующим GitHub-доступом:
 
