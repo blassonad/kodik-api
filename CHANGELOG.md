@@ -8,6 +8,7 @@
 
 - Release-инфраструктура: CI, упаковка для crates.io, contribution- и security-политики, GitHub templates и автоматические проверки зависимостей.
 - Настраиваемые `request_timeout` и `max_response_body_bytes` с безопасными значениями по умолчанию.
+- Декларативная реализация публичного `Error` через `thiserror` с сохранением транспортных и JSON-источников ошибок.
 
 ### Fixed
 
