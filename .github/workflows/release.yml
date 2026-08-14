@@ -1,35 +1,63 @@
-name: Release
+name: Publish to crates.io
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: Existing version tag to publish, for example v0.1.0
-        required: true
-        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: release-kodik-api-client
+  group: crates-io-publish
   cancel-in-progress: false
 
 jobs:
+  prepare:
+    name: Check release eligibility
+    if: github.repository == 'blassonad/kodik-api'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+      already_published: ${{ steps.package.outputs.already_published }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Read package version and query crates.io
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json, sys; print(json.load(sys.stdin)["packages"][0]["version"])')"
+          status="$(curl --silent --show-error \
+            --header 'User-Agent: kodik-api-client-release-workflow/0.1 (github-actions)' \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            "https://crates.io/api/v1/crates/kodik-api-client/${version}")"
+          case "$status" in
+            200) already_published=true ;;
+            404) already_published=false ;;
+            *) echo "Unexpected crates.io HTTP status: $status" >&2; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "already_published=$already_published" >> "$GITHUB_OUTPUT"
+          echo "Release candidate: kodik-api-client $version; already published: $already_published"
+
   publish:
-    name: Verify, publish and release
+    name: Publish ${{ needs.prepare.outputs.version }}
+    needs: prepare
+    if: needs.prepare.outputs.already_published == 'false'
     runs-on: ubuntu-latest
     environment: crates-io
     steps:
-      - name: Checkout tagged source
+      - name: Check out source
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag || github.ref }}
-          fetch-depth: 0
 
-      - name: Install stable Rust
+      - name: Install stable Rust with Rustfmt and Clippy
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -41,27 +69,32 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-publish-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-release-
+            ${{ runner.os }}-cargo-publish-
 
-      - name: Validate release quality
+      - name: Verify release candidate
         run: |
+          set -euo pipefail
           cargo fmt --check
-          cargo clippy --all-targets -- -D warnings
-          cargo test --locked --all-targets
-          RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps --document-private-items
-          cargo package --locked
-          cargo publish --locked --dry-run
+          RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
+          cargo test --doc --all-features
+          cargo test --all-targets --all-features --locked
+          cargo clippy --all-targets --all-features -- -D warnings
+          cargo publish --dry-run --locked
 
-      - name: Publish to crates.io
+      - name: Publish immutable crate version
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --locked
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ inputs.tag || github.ref_name }}"
-          gh release create "$TAG" --title "$TAG" --generate-notes
+          set -euo pipefail
+          cargo publish --locked --token "$CARGO_REGISTRY_TOKEN"
+
+  no-release-needed:
+    name: Existing version; no release needed
+    needs: prepare
+    if: needs.prepare.outputs.already_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain skip
+        run: echo "kodik-api-client ${{ needs.prepare.outputs.version }} already exists on crates.io; skipping publication."
