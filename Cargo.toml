@@ -37,7 +37,7 @@ name = "kodik_api"
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-governor = "0.8"
+governor = "0.10"
 hyper = { version = "0.14", default-features = false, features = ["client", "http1", "http2", "tcp"] }
 hyper-rustls = { version = "0.24", default-features = false, features = ["http1", "http2", "native-tokio"] }
 serde = { version = "1", features = ["derive"] }
