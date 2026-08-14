@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install stable Rust with tools
         uses: dtolnay/rust-toolchain@stable
@@ -64,7 +64,7 @@ jobs:
         toolchain: ["1.85.0", beta]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install selected Rust toolchain
         uses: dtolnay/rust-toolchain@master

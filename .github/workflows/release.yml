@@ -22,7 +22,7 @@ jobs:
       already_published: ${{ steps.package.outputs.already_published }}
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
@@ -55,7 +55,7 @@ jobs:
     environment: crates-io
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install stable Rust with Rustfmt and Clippy
         uses: dtolnay/rust-toolchain@stable
