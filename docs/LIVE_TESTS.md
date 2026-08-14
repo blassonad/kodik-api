@@ -24,7 +24,7 @@ KODIK_API_TOKEN='ваш_токен' \
 
 ## GitHub Actions
 
-Workflow [`.github/workflows/live-api.yml`](../.github/workflows/live-api.yml) запускается после push в основную ветку и вручную. Он берёт значение исключительно из `KODIK_API_TOKEN` защищённого GitHub Environment **`kodik-api`**.
+Workflow [`.github/workflows/live-api.yml`](../.github/workflows/live-api.yml) запускается после **каждого push в любую ветку** и вручную. Он берёт значение исключительно из `KODIK_API_TOKEN` защищённого GitHub Environment **`kodik-api`**.
 
 Создать secret может maintainer с соответствующим GitHub-доступом:
 

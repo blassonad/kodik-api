@@ -1,7 +1,7 @@
 name: CI
 
 on:
-  pull_request:
+  push:
   workflow_dispatch:
 
 permissions:
@@ -27,9 +27,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-stable-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-stable-
+            ${{ runner.os }}-cargo-
 
       - name: Check formatting
         run: cargo fmt --check
@@ -48,31 +48,12 @@ jobs:
       - name: Verify distributable package
         run: cargo package --allow-dirty
 
-  msrv:
-    name: MSRV (1.88)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Rust 1.88
+      - name: Install MSRV Rust 1.88
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.88.0"
 
-      - name: Cache Cargo state
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-msrv-1.88-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-msrv-1.88-
-
-      - name: Build with locked dependency graph
-        run: cargo build --locked --all-targets
-
-      - name: Test with locked dependency graph
-        run: cargo test --locked --all-targets
+      - name: Build and test with locked MSRV dependency graph
+        run: |
+          cargo +1.88.0 build --locked --all-targets
+          cargo +1.88.0 test --locked --all-targets
