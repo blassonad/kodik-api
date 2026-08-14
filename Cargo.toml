@@ -1,14 +1,40 @@
 [package]
-name = "kodik-api"
+name = "kodik-api-client"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
-description = "Typed asynchronous Rust client for the Kodik API"
+rust-version = "1.85"
+description = "Typed asynchronous Rust client for the public Kodik API"
 license = "MIT"
 repository = "https://github.com/blassonad/kodik-api"
+homepage = "https://github.com/blassonad/kodik-api#readme"
+documentation = "https://docs.rs/kodik-api-client"
 readme = "README.md"
 keywords = ["kodik", "api", "client", "async", "hyper"]
-categories = ["api-bindings", "asynchronous"]
+categories = ["api-bindings", "asynchronous", "network-programming"]
+include = [
+    "src/**",
+    "examples/**",
+    "tests/**",
+    "docs/API.md",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "SUPPORT.md",
+    "CODE_OF_CONDUCT.md",
+    "RELEASING.md",
+    "LICENSE",
+    "Cargo.toml",
+    "Cargo.lock",
+]
+publish = ["crates-io"]
+
+[lib]
+# Preserve the ergonomic Rust import: `use kodik_api::KodikClient;`.
+name = "kodik_api"
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 governor = "0.8"
@@ -25,4 +51,5 @@ strip = "symbols"
 
 [package.metadata.docs.rs]
 all-features = true
+targets = []
 rustdoc-args = ["--cfg", "docsrs"]

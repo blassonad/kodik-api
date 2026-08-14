@@ -1,6 +1,11 @@
-# kodik-api
+# kodik-api-client
 
-**`kodik-api`** — подробная асинхронная Rust-библиотека для публичного Kodik API. Она покрывает ресурсы `/years`, `/genres`, `/countries`, `/qualities/v2`, `/translations/v2`, `/list` и `/search`, предоставляет типизированные фильтры и модели ответов, а также поддерживает передачу параметров через `GET` и `POST`.[1]
+[![CI](https://github.com/blassonad/kodik-api/actions/workflows/ci.yml/badge.svg)](https://github.com/blassonad/kodik-api/actions/workflows/ci.yml)
+[![docs.rs](https://img.shields.io/docsrs/kodik-api-client)](https://docs.rs/kodik-api-client)
+[![crates.io](https://img.shields.io/crates/v/kodik-api-client)](https://crates.io/crates/kodik-api-client)
+[![License](https://img.shields.io/crates/l/kodik-api-client)](LICENSE)
+
+**`kodik-api-client`** — подробная асинхронная Rust-библиотека для публичного Kodik API. Она покрывает ресурсы `/years`, `/genres`, `/countries`, `/qualities/v2`, `/translations/v2`, `/list` и `/search`, предоставляет типизированные фильтры и модели ответов, а также поддерживает передачу параметров через `GET` и `POST`.[1]
 
 > Библиотека **не содержит токенов**, не выводит их в лог и не включает реальных ключей в примеры. Используйте собственный токен только через переменную окружения `KODIK_API_TOKEN`.
 
@@ -14,12 +19,19 @@
 
 ## Установка
 
-Добавьте зависимость из Git в `Cargo.toml`. Минимальная версия Rust в манифесте — **1.75**.
+После публикации добавьте dependency из crates.io; минимальная поддерживаемая версия Rust (MSRV) — **1.85**.
 
 ```toml
 [dependencies]
-kodik-api = { git = "https://github.com/blassonad/kodik-api", branch = "feat/rust-kodik-client" }
+kodik-api-client = "0.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+```
+
+До первой публикации используйте Git-ветку:
+
+```toml
+[dependencies]
+kodik-api-client = { git = "https://github.com/blassonad/kodik-api", branch = "feat/rust-kodik-client" }
 ```
 
 Локально проект проверяется командой:
@@ -104,7 +116,7 @@ async fn next_page(client: &KodikClient, first: &kodik_api::ListResponse)
 }
 ```
 
-Полный перечень структур, всех полей и семантики доступен в [`docs/API.md`](docs/API.md). Рабочие, не содержащие ключа примеры находятся в [`examples/search.rs`](examples/search.rs) и [`examples/list_all.rs`](examples/list_all.rs).
+Полный перечень структур, всех полей и семантики доступен в [`docs/API.md`](docs/API.md). Рабочие, не содержащие ключа примеры находятся в [`examples/search.rs`](examples/search.rs) и [`examples/list_all.rs`](examples/list_all.rs). Процедура публикации в crates.io и создания GitHub Release описана в [`RELEASING.md`](RELEASING.md).
 
 ## Лицензия
 

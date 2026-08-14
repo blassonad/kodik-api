@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a reproducible defect in kodik-api-client
+title: "bug: "
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not include API tokens, player URLs containing tokens, credentials, or private user data. Security issues must be reported using SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Crate version
+      description: Version from Cargo.lock or Cargo.toml.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: rust
+    attributes:
+      label: Rust version
+      description: Output of `rustc --version`.
+      placeholder: "rustc 1.xx.x (...)"
+    validations:
+      required: true
+  - type: dropdown
+    id: endpoint
+    attributes:
+      label: Relevant API area
+      options:
+        - Client construction / TLS / rate limit
+        - /years
+        - /genres
+        - /countries
+        - /qualities/v2
+        - /translations/v2
+        - /list / pagination
+        - /search
+        - Models / JSON decoding
+        - Documentation or examples
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide a self-contained Rust snippet without secrets.
+      render: rust
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour, error or panic output
+    validations:
+      required: true

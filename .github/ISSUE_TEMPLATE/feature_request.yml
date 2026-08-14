@@ -1,0 +1,44 @@
+name: Feature request
+description: Propose an improvement to the Rust client or its documentation
+title: "feat: "
+labels: [enhancement, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the proposal. Do not include API tokens or confidential Kodik data.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Explain the use case and the current limitation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API or behaviour
+      description: Show an example of the desired Rust API, if possible.
+      render: rust
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - New Kodik endpoint
+        - New request parameter or filter
+        - Response model
+        - Error handling or transport
+        - Documentation or example
+        - Tooling or release process
+        - Other
+    validations:
+      required: true
