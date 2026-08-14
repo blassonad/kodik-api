@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# Install once per clone with: ./scripts/install-git-hooks.sh
+set -eu
+
+printf '%s\n' 'Running local Rust commit checks…'
+cargo fmt --check
+cargo test --all-targets
+cargo clippy --all-targets -- -D warnings
+printf '%s\n' 'Local commit checks passed.'
