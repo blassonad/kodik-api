@@ -2,9 +2,10 @@
 
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use std::time::Duration;
 
 use governor::{Quota, RateLimiter};
-use hyper::body::to_bytes;
+use hyper::body::HttpBody;
 use hyper::client::HttpConnector;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::{Body, Client, Method, Request, Uri};
@@ -23,6 +24,11 @@ use crate::query::{
 /// Адрес публичного Kodik API по умолчанию.
 pub const DEFAULT_BASE_URL: &str = "https://kodik-api.com";
 
+/// Максимальная продолжительность одного HTTP-обмена после прохождения rate limiter.
+pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+/// Максимальное число байтов, которые клиент прочитает из одного ответа.
+pub const DEFAULT_MAX_RESPONSE_BODY_BYTES: usize = 8 * 1024 * 1024;
+
 type HttpsClient = Client<HttpsConnector<HttpConnector>, Body>;
 type DirectRateLimiter = governor::DefaultDirectRateLimiter;
 
@@ -35,6 +41,8 @@ pub struct KodikClientBuilder {
     token: String,
     base_url: String,
     requests_per_second: NonZeroU32,
+    request_timeout: Duration,
+    max_response_body_bytes: usize,
 }
 
 impl KodikClientBuilder {
@@ -44,12 +52,32 @@ impl KodikClientBuilder {
             token: token.into(),
             base_url: DEFAULT_BASE_URL.into(),
             requests_per_second: NonZeroU32::new(3).expect("3 is non-zero"),
+            request_timeout: DEFAULT_REQUEST_TIMEOUT,
+            max_response_body_bytes: DEFAULT_MAX_RESPONSE_BODY_BYTES,
         }
     }
 
     /// Устанавливает предельное число исходящих запросов в секунду.
     pub fn requests_per_second(mut self, value: NonZeroU32) -> Self {
         self.requests_per_second = value;
+        self
+    }
+
+    /// Устанавливает максимальную продолжительность HTTP-обмена после rate limiter.
+    ///
+    /// Значение не включает ожидание собственной квоты [`governor`], но включает
+    /// получение заголовков и чтение всего ограниченного тела ответа.
+    pub fn request_timeout(mut self, value: Duration) -> Self {
+        self.request_timeout = value;
+        self
+    }
+
+    /// Устанавливает максимальный размер тела одного ответа в байтах.
+    ///
+    /// Клиент останавливает чтение сразу после превышения этого значения и
+    /// возвращает [`Error::ResponseBodyTooLarge`].
+    pub fn max_response_body_bytes(mut self, value: usize) -> Self {
+        self.max_response_body_bytes = value;
         self
     }
 
@@ -72,6 +100,16 @@ impl KodikClientBuilder {
                 "base URL must begin with http:// or https://".into(),
             ));
         }
+        if self.request_timeout.is_zero() {
+            return Err(Error::Validation(
+                "request timeout must be greater than zero".into(),
+            ));
+        }
+        if self.max_response_body_bytes == 0 {
+            return Err(Error::Validation(
+                "maximum response body size must be greater than zero".into(),
+            ));
+        }
 
         let connector = HttpsConnectorBuilder::new()
             .with_native_roots()
@@ -87,6 +125,8 @@ impl KodikClientBuilder {
             limiter: Arc::new(RateLimiter::direct(Quota::per_second(
                 self.requests_per_second,
             ))),
+            request_timeout: self.request_timeout,
+            max_response_body_bytes: self.max_response_body_bytes,
         })
     }
 }
@@ -101,6 +141,8 @@ pub struct KodikClient {
     base_url: Arc<str>,
     http: HttpsClient,
     limiter: Arc<DirectRateLimiter>,
+    request_timeout: Duration,
+    max_response_body_bytes: usize,
 }
 
 impl KodikClient {
@@ -250,9 +292,16 @@ impl KodikClient {
         let request = self.build_request(endpoint, parameters, method)?;
 
         self.limiter.until_ready().await;
-        let response = self.http.request(request).await?;
-        let status = response.status();
-        let body = to_bytes(response.into_body()).await?;
+        let timeout = self.request_timeout;
+        let max_response_body_bytes = self.max_response_body_bytes;
+        let (status, body) = tokio::time::timeout(timeout, async {
+            let response = self.http.request(request).await?;
+            let status = response.status();
+            let body = read_response_body(response.into_body(), max_response_body_bytes).await?;
+            Ok::<_, Error>((status, body))
+        })
+        .await
+        .map_err(|_| Error::Timeout(timeout))??;
 
         if !status.is_success() {
             return Err(Error::HttpStatus {
@@ -261,7 +310,7 @@ impl KodikClient {
             });
         }
 
-        decode_json(body.as_ref())
+        decode_json(&body)
     }
 
     fn build_request(
@@ -296,6 +345,30 @@ impl KodikClient {
         };
         builder.body(body).map_err(Error::RequestBuild)
     }
+}
+
+async fn read_response_body(mut body: Body, limit: usize) -> Result<Vec<u8>> {
+    if body
+        .size_hint()
+        .upper()
+        .is_some_and(|length| length > limit as u64)
+    {
+        return Err(Error::ResponseBodyTooLarge { limit });
+    }
+
+    let mut bytes = Vec::new();
+    while let Some(chunk) = body.data().await {
+        let chunk = chunk?;
+        let total = bytes
+            .len()
+            .checked_add(chunk.len())
+            .ok_or(Error::ResponseBodyTooLarge { limit })?;
+        if total > limit {
+            return Err(Error::ResponseBodyTooLarge { limit });
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
 }
 
 fn decode_json<T: DeserializeOwned>(source: &[u8]) -> Result<T> {
@@ -418,5 +491,34 @@ mod tests {
     #[test]
     fn rejected_status_is_not_treated_as_success() {
         assert!(!StatusCode::TOO_MANY_REQUESTS.is_success());
+    }
+
+    #[test]
+    fn builder_rejects_zero_timeout_and_body_limit() {
+        let timeout_error = match KodikClient::builder("token")
+            .request_timeout(Duration::ZERO)
+            .build()
+        {
+            Err(error) => error,
+            Ok(_) => panic!("zero timeout must be rejected"),
+        };
+        assert!(matches!(timeout_error, Error::Validation(_)));
+
+        let body_limit_error = match KodikClient::builder("token")
+            .max_response_body_bytes(0)
+            .build()
+        {
+            Err(error) => error,
+            Ok(_) => panic!("zero response body limit must be rejected"),
+        };
+        assert!(matches!(body_limit_error, Error::Validation(_)));
+    }
+
+    #[tokio::test]
+    async fn response_body_limit_rejects_known_oversized_body_before_buffering() {
+        let error = read_response_body(Body::from("12345"), 4)
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::ResponseBodyTooLarge { limit: 4 }));
     }
 }
