@@ -24,13 +24,15 @@ let client = KodikClient::builder(std::env::var("KODIK_API_TOKEN")?)
     .build()?;
 ```
 
-`KodikClient::new(token)` создаёт эквивалентный клиент с базовым URL `https://kodik-api.com` и тремя запросами в секунду. `KodikClient::builder(token)` возвращает `KodikClientBuilder`, в котором можно изменить квоту и `base_url`. Последняя настройка рассчитана на тесты; в production следует оставлять официальный домен.[1]
+`KodikClient::new(token)` создаёт эквивалентный клиент с базовым URL `https://kodik-api.com`, тремя запросами в секунду, 20-секундным HTTP-таймаутом и лимитом тела ответа 8 МиБ. `KodikClient::builder(token)` возвращает `KodikClientBuilder`, в котором можно изменить квоту, таймаут, предел тела и `base_url`. Последняя настройка рассчитана на тесты; в production следует оставлять официальный домен.[1]
 
 | Тип или метод | Вход | Результат и правила |
 |---|---|---|
 | `KodikClient::new(token)` | `impl Into<String>` | `Result<KodikClient>`; пустой токен вызывает `Error::Validation`. |
 | `KodikClient::builder(token)` | `impl Into<String>` | `KodikClientBuilder`. |
 | `KodikClientBuilder::requests_per_second` | `NonZeroU32` | Задаёт общую квоту клиента. |
+| `KodikClientBuilder::request_timeout` | `Duration` | Максимум времени на HTTP-обмен после rate limiter; 20 секунд по умолчанию; ноль отвергается. |
+| `KodikClientBuilder::max_response_body_bytes` | `usize` | Максимум буферизуемых байтов ответа; 8 МиБ по умолчанию; ноль отвергается. |
 | `KodikClientBuilder::base_url` | `impl Into<String>` | Меняет origin; допускаются только URL с `http://` либо `https://`. |
 | `KodikClientBuilder::build` | — | Создаёт TLS-коннектор с системными корневыми сертификатами. |
 | `KodikClient::base_url` | — | Возвращает текущий origin; токен не раскрывается. |
@@ -90,7 +92,7 @@ let query = GenresQuery {
 | Поле `ListQuery` | Тип | Кодируемый параметр | Семантика |
 |---|---|---|---|
 | `filters` | `Filters` | См. раздел 3 | Общие ограничения выдачи. |
-| `limit` | `Option<u8>` | `limit` | От 1 до 100; `None` оставляет дефолт Kodik. Ноль отвергается локально. |
+| `limit` | `Option<u8>` | `limit` | От 1 до 100 включительно; `None` оставляет дефолт Kodik. `0` и `101+` отвергаются локально. |
 | `sort` | `ListSort` | `sort` | `Year`, `CreatedAt`, `UpdatedAt`, `KinopoiskRating`, `ImdbRating`, `ShikimoriRating`. |
 | `order` | `SortOrder` | `order` | `Asc` или `Desc`. |
 | `with_seasons` | `bool` | `with_seasons=true` | Добавляет карту сезонов. |
@@ -138,7 +140,7 @@ if let Some(next_url) = &first.next_page {
 | `worldart_cinema_ids` | `Vec<String>` | `worldart_cinema_id` | ID World Art в разделе кино. |
 | `worldart_link` | `Option<String>` | `worldart_link` | Полная ссылка World Art. |
 | `shikimori_ids` | `Vec<String>` | `shikimori_id` | ID Shikimori. |
-| `limit` | `Option<u8>` | `limit` | От 1 до 100; 0 отвергается. |
+| `limit` | `Option<u8>` | `limit` | От 1 до 100 включительно; `0` и `101+` отвергаются. |
 | `filters` | `Filters` | См. раздел 3 | Общие условия. |
 | `prioritize_translations` | `Vec<String>` | `prioritize_translations` | Приоритеты ID/`voice`/`subtitles` слева направо; `"0"` отключает дефолт API. |
 | `unprioritize_translations` | `Vec<String>` | `unprioritize_translations` | Пониженные приоритеты ID/типов; `"0"` выключает серверный дефолт. |
@@ -150,7 +152,7 @@ if let Some(next_url) = &first.next_page {
 | `not_blocked_in`, `not_blocked_for_me` | `Vec<String>`, `bool` | Одноимённые | Географические ограничения. |
 | `with_material_data` | `bool` | `with_material_data` | Внешние метаданные. |
 
-`SearchQuery::validate()` возвращает `Error::Validation`, если не указан критерий либо `episode` указан без `season`. Его можно вызвать явно, но сетевой метод вызывает валидацию автоматически.
+`SearchQuery::validate()` возвращает `Error::Validation`, если не указан непустой критерий, передан только `Some("")`/пробелы либо `episode` указан без `season`. Его можно вызвать явно, но сетевой метод вызывает валидацию автоматически.
 
 ```rust
 use kodik_api::{KodikClient, SearchQuery, TranslationType};
@@ -279,7 +281,9 @@ assert!(encoded.contains("countries=%D0%A1%D0%A8%D0%90%2C"));
 
 | Вариант `Error` | Причина | Рекомендованная реакция |
 |---|---|---|
-| `Validation(String)` | Пустой токен, нулевой `limit`, пустой поиск, `episode` без `season`, некорректный базовый URL или курсор. | Исправить входной запрос; повторять бессмысленно. |
+| `Validation(String)` | Пустой токен, `limit` вне `1..=100`, пустой/пробельный поиск, `episode` без `season`, нулевой таймаут или лимит тела, некорректный базовый URL или курсор. | Исправить входной запрос; повторять бессмысленно. |
+| `Timeout(Duration)` | Получение заголовков или чтение тела не завершилось за настроенный период. | Повторить с backoff либо увеличить `request_timeout`. |
+| `ResponseBodyTooLarge { limit }` | Серверный ответ больше `max_response_body_bytes`; чтение остановлено до неограниченного роста памяти. | Увеличить предел осознанно либо сузить запрос. |
 | `InvalidUri` | Собранный endpoint/URL нельзя разобрать в `hyper::Uri`. | Проверить test-only `base_url` и входные данные. |
 | `RequestBuild` | Hyper отклонил составление запроса. | Считать ошибкой конфигурации. |
 | `Transport(hyper::Error)` | Сеть, TLS или HTTP-протокол. | При необходимости повторить с backoff в приложении. |
@@ -290,7 +294,7 @@ assert!(encoded.contains("countries=%D0%A1%D0%A8%D0%90%2C"));
 
 ## 7. Проверка и примеры
 
-В репозитории есть восемь модульных проверок: сериализация Unicode/списков, валидация `/search`, зависимость `episode → season`, извлечение курсора, GET/POST-запросы, десериализация `simd-json` и проверка обработки неуспешных HTTP-статусов. Запустите:
+В репозитории есть двенадцать модульных проверок: сериализация Unicode/списков, строгая валидация `/search`, пределы `limit`, зависимость `episode → season`, извлечение курсора, GET/POST-запросы, десериализация `simd-json`, проверки builder и ограниченное чтение слишком большого тела ответа. Запустите:
 
 ```bash
 cargo fmt --check

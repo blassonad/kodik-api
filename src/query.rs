@@ -502,7 +502,7 @@ pub struct ListQuery {
 impl ListQuery {
     /// Проверяет границы `limit` до сетевого вызова.
     pub fn validate(&self) -> Result<()> {
-        if matches!(self.limit, Some(0)) {
+        if self.limit.is_some_and(|limit| !(1..=100).contains(&limit)) {
             return Err(Error::Validation("list limit must be in 1..=100".into()));
         }
         Ok(())
@@ -575,7 +575,7 @@ pub struct SearchQuery {
 impl SearchQuery {
     /// Валидирует обязательный критерий поиска и зависимость `episode -> season`.
     pub fn validate(&self) -> Result<()> {
-        if matches!(self.limit, Some(0)) {
+        if self.limit.is_some_and(|limit| !(1..=100).contains(&limit)) {
             return Err(Error::Validation("search limit must be in 1..=100".into()));
         }
         if self.episode.is_some() && self.season.is_none() {
@@ -583,17 +583,17 @@ impl SearchQuery {
                 "search episode requires a corresponding season".into(),
             ));
         }
-        if self.title.is_none()
-            && self.title_orig.is_none()
-            && self.id.is_none()
-            && self.player_link.is_none()
-            && self.kinopoisk_ids.is_empty()
-            && self.imdb_ids.is_empty()
-            && self.mdl_ids.is_empty()
-            && self.worldart_animation_ids.is_empty()
-            && self.worldart_cinema_ids.is_empty()
-            && self.worldart_link.is_none()
-            && self.shikimori_ids.is_empty()
+        if !has_text(self.title.as_deref())
+            && !has_text(self.title_orig.as_deref())
+            && !has_text(self.id.as_deref())
+            && !has_text(self.player_link.as_deref())
+            && !has_non_blank_item(&self.kinopoisk_ids)
+            && !has_non_blank_item(&self.imdb_ids)
+            && !has_non_blank_item(&self.mdl_ids)
+            && !has_non_blank_item(&self.worldart_animation_ids)
+            && !has_non_blank_item(&self.worldart_cinema_ids)
+            && !has_text(self.worldart_link.as_deref())
+            && !has_non_blank_item(&self.shikimori_ids)
         {
             return Err(Error::Validation(
                 "search requires title, title_orig, Kodik ID, player link, or an external ID"
@@ -659,7 +659,7 @@ impl Parameters {
     }
 
     fn push_string(&mut self, key: impl Into<String>, value: Option<&str>) {
-        if let Some(value) = value.filter(|value| !value.is_empty()) {
+        if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
             self.0.push((key.into(), value.to_owned()));
         }
     }
@@ -752,6 +752,14 @@ impl IntoParameters for SearchQuery {
     }
 }
 
+fn has_text(value: Option<&str>) -> bool {
+    value.is_some_and(|value| !value.trim().is_empty())
+}
+
+fn has_non_blank_item(values: &[String]) -> bool {
+    values.iter().any(|value| !value.trim().is_empty())
+}
+
 fn percent_encode(value: &str) -> String {
     let mut encoded = String::with_capacity(value.len());
     for byte in value.bytes() {
@@ -805,5 +813,45 @@ mod tests {
             ..Default::default()
         };
         assert!(query.validate().is_err());
+    }
+
+    #[test]
+    fn search_rejects_empty_or_whitespace_only_criteria() {
+        for value in ["", "   ", "\n\t"] {
+            let query = SearchQuery {
+                title: Some(value.into()),
+                ..Default::default()
+            };
+            assert!(
+                query.validate().is_err(),
+                "criterion {value:?} must be rejected"
+            );
+        }
+
+        let query = SearchQuery {
+            kinopoisk_ids: vec![" ".into(), "\t".into()],
+            ..Default::default()
+        };
+        assert!(query.validate().is_err());
+    }
+
+    #[test]
+    fn list_and_search_reject_limits_outside_one_through_one_hundred() {
+        for limit in [0, 101] {
+            assert!(ListQuery {
+                limit: Some(limit),
+                ..Default::default()
+            }
+            .validate()
+            .is_err());
+
+            assert!(SearchQuery {
+                title: Some("Avatar".into()),
+                limit: Some(limit),
+                ..Default::default()
+            }
+            .validate()
+            .is_err());
+        }
     }
 }

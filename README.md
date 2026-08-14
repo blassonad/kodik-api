@@ -66,6 +66,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## Надёжность запросов
+
+Клиент безопасен по умолчанию: запрос получает **20-секундный таймаут** после ожидания rate limit, а чтение тела ограничено **8 МиБ**. Превышение лимита возвращает `Error::ResponseBodyTooLarge`; таймаут возвращает `Error::Timeout`. Это не исключает буферизации успешного JSON полностью — она необходима `simd-json` для разбора среза байтов, — но не позволяет ответу неограниченно занять память.
+
+Настройки можно изменить для конкретного клиента:
+
+```rust
+use std::time::Duration;
+use kodik_api::KodikClient;
+
+let client = KodikClient::builder("token")
+    .request_timeout(Duration::from_secs(10))
+    .max_response_body_bytes(2 * 1024 * 1024)
+    .build()?;
+# Ok::<(), kodik_api::Error>(())
+```
+
+`SearchQuery` отклоняет `Some("")` и строки, состоящие только из пробелов, как отсутствующий критерий. `ListQuery::limit` и `SearchQuery::limit` принимают только значения от `1` до `100` включительно; `0` и `101+` возвращают `Error::Validation` до сетевого вызова.
+
 ## Методы клиента
 
 | Метод | Kodik endpoint | Результат | Особенность |

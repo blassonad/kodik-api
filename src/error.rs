@@ -1,6 +1,7 @@
 //! Ошибки, возвращаемые библиотекой.
 
 use std::fmt;
+use std::time::Duration;
 
 /// Результат операции библиотеки Kodik API.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -16,6 +17,13 @@ pub enum Error {
     RequestBuild(hyper::http::Error),
     /// TLS-соединение, сеть или HTTP-протокол вернули ошибку.
     Transport(hyper::Error),
+    /// Полный HTTP-запрос (получение заголовков и тела) не завершился за отведённое время.
+    Timeout(Duration),
+    /// Ответ превысил настроенное ограничение, поэтому его чтение было остановлено.
+    ResponseBodyTooLarge {
+        /// Максимально допустимый размер тела в байтах.
+        limit: usize,
+    },
     /// Тело ответа нельзя разобрать как JSON.
     Json(simd_json::Error),
     /// Сервер вернул HTTP-статус вне успешного диапазона `2xx`.
@@ -34,6 +42,15 @@ impl fmt::Display for Error {
             Self::InvalidUri(error) => write!(f, "invalid request URI: {error}"),
             Self::RequestBuild(error) => write!(f, "could not build HTTP request: {error}"),
             Self::Transport(error) => write!(f, "Kodik HTTP transport error: {error}"),
+            Self::Timeout(timeout) => write!(
+                f,
+                "Kodik HTTP request did not complete within {} ms",
+                timeout.as_millis()
+            ),
+            Self::ResponseBodyTooLarge { limit } => write!(
+                f,
+                "Kodik HTTP response exceeded the configured {limit}-byte body limit"
+            ),
             Self::Json(error) => write!(f, "could not decode Kodik JSON response: {error}"),
             Self::HttpStatus { status, body } => {
                 write!(f, "Kodik API returned HTTP {status}: {body}")
@@ -49,7 +66,10 @@ impl std::error::Error for Error {
             Self::RequestBuild(error) => Some(error),
             Self::Transport(error) => Some(error),
             Self::Json(error) => Some(error),
-            Self::Validation(_) | Self::HttpStatus { .. } => None,
+            Self::Validation(_)
+            | Self::Timeout(_)
+            | Self::ResponseBodyTooLarge { .. }
+            | Self::HttpStatus { .. } => None,
         }
     }
 }
