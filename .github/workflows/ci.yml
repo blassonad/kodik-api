@@ -2,17 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/rust-kodik-client]
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Каждый push получает собственный CI run: проверка предыдущего commit не отменяется
+# при появлении следующего commit в той же ветке.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   quality:
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install stable Rust with tools
         uses: dtolnay/rust-toolchain@stable
@@ -64,7 +64,7 @@ jobs:
         toolchain: ["1.85.0", beta]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install selected Rust toolchain
         uses: dtolnay/rust-toolchain@master
