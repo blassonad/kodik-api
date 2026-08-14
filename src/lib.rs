@@ -41,7 +41,10 @@ mod error;
 mod models;
 mod query;
 
-pub use client::{KodikClient, KodikClientBuilder, DEFAULT_BASE_URL};
+pub use client::{
+    KodikClient, KodikClientBuilder, DEFAULT_BASE_URL, DEFAULT_MAX_RESPONSE_BODY_BYTES,
+    DEFAULT_REQUEST_TIMEOUT,
+};
 pub use error::{Error, Result};
 pub use models::{
     BlockedSeason, BlockedSeasons, CollectionResponse, Episode, EpisodeData, Episodes, LabelCount,

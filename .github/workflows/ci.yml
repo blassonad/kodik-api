@@ -2,17 +2,10 @@ name: CI
 
 on:
   push:
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-
-# Каждый push получает собственный CI run: проверка предыдущего commit не отменяется
-# при появлении следующего commit в той же ветке.
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.sha }}
-  cancel-in-progress: false
 
 jobs:
   quality:
@@ -34,9 +27,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-stable-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-stable-
+            ${{ runner.os }}-cargo-
 
       - name: Check formatting
         run: cargo fmt --check
@@ -55,35 +48,38 @@ jobs:
       - name: Verify distributable package
         run: cargo package --allow-dirty
 
-  msrv:
-    name: MSRV (${{ matrix.toolchain }})
+      - name: Install Rust 1.97.1
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.1"
+
+      - name: Build and test with locked Rust 1.97.1 dependency graph
+        run: |
+          cargo +1.97.1 build --locked --all-targets
+          cargo +1.97.1 test --locked --all-targets
+
+
+  live-api:
+    name: Live API integration tests
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        toolchain: ["1.85.0", beta]
+    timeout-minutes: 10
+    env:
+      KODIK_API_TOKEN: ${{ secrets.KODIK_API_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install selected Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.toolchain }}
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Cargo state
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ matrix.toolchain }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.toolchain }}-
+      - name: Require Kodik token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$KODIK_API_TOKEN" ]; then
+            echo "KODIK_API_TOKEN is missing from repository Actions secrets." >&2
+            exit 1
+          fi
 
-      - name: Build with locked dependency graph
-        run: cargo build --locked --all-targets
-
-      - name: Test with locked dependency graph
-        run: cargo test --locked --all-targets
+      - name: Run ignored live integration tests sequentially
+        run: cargo test --locked --test live_api -- --ignored --test-threads=1
