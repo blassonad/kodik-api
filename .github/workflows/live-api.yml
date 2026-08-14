@@ -15,7 +15,6 @@ jobs:
   live-api:
     name: Live API integration tests
     runs-on: ubuntu-latest
-    environment: kodik-api
     timeout-minutes: 10
     env:
       KODIK_API_TOKEN: ${{ secrets.KODIK_API_TOKEN }}
@@ -31,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$KODIK_API_TOKEN" ]; then
-            echo "KODIK_API_TOKEN is missing from the protected kodik-api Environment." >&2
+            echo "KODIK_API_TOKEN is missing from repository Actions secrets." >&2
             exit 1
           fi
 

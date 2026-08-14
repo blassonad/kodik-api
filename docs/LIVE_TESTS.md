@@ -24,13 +24,13 @@ KODIK_API_TOKEN='ваш_токен' \
 
 ## GitHub Actions
 
-Workflow [`.github/workflows/live-api.yml`](../.github/workflows/live-api.yml) запускается после **каждого push в любую ветку** и вручную. Он берёт значение исключительно из `KODIK_API_TOKEN` защищённого GitHub Environment **`kodik-api`**.
+Workflow [`.github/workflows/live-api.yml`](../.github/workflows/live-api.yml) запускается после **каждого push в любую ветку** и вручную. Он берёт значение исключительно из обычного repository Actions secret `KODIK_API_TOKEN`; GitHub Environment намеренно не используется, поэтому обычный CI job не отображается как deployment.
 
-Создать secret может maintainer с соответствующим GitHub-доступом:
+Создать secret может владелец репозитория с соответствующим GitHub-доступом:
 
 ```bash
 printf '%s' 'ваш_токен' | \
-  gh secret set KODIK_API_TOKEN --repo blassonad/kodik-api --env kodik-api
+  gh secret set KODIK_API_TOKEN --repo blassonad/kodik-api
 ```
 
 GitHub не возвращает значение secret после сохранения и маскирует его в логах Actions. Workflow завершится ошибкой, а не выполнит фиктивную проверку, если secret отсутствует.
